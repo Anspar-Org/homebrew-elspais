@@ -1,0 +1,119 @@
+name: Update Homebrew Formula
+
+on:
+  repository_dispatch:
+    types: [update-formula]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update to (e.g., 0.51.0)'
+        required: true
+        type: string
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${{ github.event.client_payload.version }}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Updating to elspais v${VERSION}"
+
+      - name: Fetch package info and update formulas
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 << 'EOF'
+          import json, os, re, urllib.request
+
+          version = os.environ["VERSION"]
+
+          # Fetch elspais sdist info
+          with urllib.request.urlopen(f"https://pypi.org/pypi/elspais/{version}/json") as r:
+              pkg = json.loads(r.read())
+          sdist = next(f for f in pkg["urls"] if f["packagetype"] == "sdist")
+          sdist_url = sdist["url"]
+          sdist_sha = sdist["digests"]["sha256"]
+
+          # Fetch latest tomlkit info
+          with urllib.request.urlopen("https://pypi.org/pypi/tomlkit/json") as r:
+              tk = json.loads(r.read())
+          tk_sdist = next(f for f in tk["urls"] if f["packagetype"] == "sdist")
+          tk_url = tk_sdist["url"]
+          tk_sha = tk_sdist["digests"]["sha256"]
+
+          print(f"elspais {version}: {sdist_sha[:16]}...")
+          print(f"tomlkit {tk['info']['version']}: {tk_sha[:16]}...")
+
+          # Update both formulas
+          for formula_path in ["Formula/elspais.rb", "Formula/elspais-core.rb"]:
+              with open(formula_path) as f:
+                  content = f.read()
+
+              # Update elspais URL and SHA (first occurrence)
+              content = re.sub(
+                  r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
+                  f'url "{sdist_url}"',
+                  content,
+                  count=1,
+              )
+              content = re.sub(
+                  r'sha256 "[a-f0-9]+"',
+                  f'sha256 "{sdist_sha}"',
+                  content,
+                  count=1,
+              )
+
+              # Update tomlkit resource (core formula)
+              if "resource \"tomlkit\"" in content:
+                  # Find the tomlkit resource block and update url + sha
+                  content = re.sub(
+                      r'(resource "tomlkit" do\s+url ")[^"]+(")',
+                      rf'\g<1>{tk_url}\2',
+                      content,
+                  )
+                  # Update sha256 inside tomlkit block (second sha256 in file)
+                  parts = content.split('resource "tomlkit"', 1)
+                  parts[1] = re.sub(
+                      r'sha256 "[a-f0-9]+"',
+                      f'sha256 "{tk_sha}"',
+                      parts[1],
+                      count=1,
+                  )
+                  content = 'resource "tomlkit"'.join(parts)
+
+              with open(formula_path, "w") as f:
+                  f.write(content)
+              print(f"Updated {formula_path}")
+          EOF
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: Update elspais to ${{ steps.version.outputs.version }}"
+          title: "Update elspais to ${{ steps.version.outputs.version }}"
+          body: |
+            Automated formula update for elspais v${{ steps.version.outputs.version }}.
+
+            - [PyPI release](https://pypi.org/project/elspais/${{ steps.version.outputs.version }}/)
+            - [Changelog](https://github.com/anspar/elspais/blob/main/CHANGELOG.md)
+          branch: update-v${{ steps.version.outputs.version }}
+          delete-branch: true
