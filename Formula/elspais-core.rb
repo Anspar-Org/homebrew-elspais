@@ -3,8 +3,8 @@ class ElspaisCore < Formula
 
   desc "Requirements validation and traceability tools (core only)"
   homepage "https://github.com/anspar/elspais"
-  url "https://files.pythonhosted.org/packages/c2/7b/287723674678e8308f5b270a449d44493974ee1ff9af389a414f1ee32a0a/elspais-0.59.0.tar.gz"
-  sha256 "30dac13dfee5fa1bc0bed9ef0540721cd9d7956bd3dd57cf48666bbd45426386"
+  url "https://files.pythonhosted.org/packages/f8/86/6050d6d187804841bde2941edcb1fab361ed26fae90f9f862649700a1c0d/elspais-0.63.3.tar.gz"
+  sha256 "449ee174caa4c47a801cfe23d61693fa79565551fd1bd6f504220a372e9cdbd6"
   license "AGPL-3.0-only"
 
   depends_on "python@3.12"
