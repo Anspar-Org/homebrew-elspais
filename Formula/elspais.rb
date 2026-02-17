@@ -9,8 +9,8 @@ class Elspais < Formula
   revision 1
   head "https://github.com/Anspar-Org/elspais.git", branch: "main"
 
-  depends_on "python@3.12"
   depends_on "rust" => :build
+  depends_on "python@3.12"
 
   resource "annotated-types" do
     url "https://files.pythonhosted.org/packages/ee/67/531ea369ba64dcff5ec9c3402f9f51bf748cec26dde048a2f973a4eea7f5/annotated_types-0.7.0.tar.gz"
@@ -191,6 +191,7 @@ class Elspais < Formula
     url "https://files.pythonhosted.org/packages/5a/70/1469ef1d3542ae7c2c7b72bd5e3a4e6ee69d7978fa8a3af05a38eca5becf/werkzeug-3.1.5.tar.gz"
     sha256 "6a548b0e88955dd07ccb25539d7d0cc97417ee9e179677d22c7041c8f078ce67"
   end
+
   def install
     virtualenv_install_with_resources
     # Symlink argcomplete's helper for shell completion setup
