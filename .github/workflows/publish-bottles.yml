@@ -62,6 +62,16 @@ jobs:
           ls -la *.bottle.json *.tar.gz 2>/dev/null || true
           brew bottle --merge --write --no-commit *.bottle.json
 
+      - name: Rename bottles for GitHub Releases compatibility
+        run: |
+          # brew test-bot names bottles with double dash (elspais--version)
+          # but Homebrew downloads expect single dash (elspais-version) with root_url
+          for f in *--*.bottle.tar.gz; do
+            newname="${f/--/-}"
+            echo "Renaming: $f -> $newname"
+            mv "$f" "$newname"
+          done
+
       - name: Create GitHub Release and upload bottles
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

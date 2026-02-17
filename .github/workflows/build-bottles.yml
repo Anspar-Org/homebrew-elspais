@@ -25,6 +25,13 @@ jobs:
           key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}
           restore-keys: ${{ matrix.os }}-rubygems-
 
+      - name: Ensure rustup is in PATH
+        run: |
+          # macOS runners have rustup pre-installed; add it to PATH so Homebrew
+          # skips building its own rust formula (~2.2GB of deps)
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustc --version
+
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
