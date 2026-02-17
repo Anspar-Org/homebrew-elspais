@@ -7,10 +7,10 @@ class Elspais < Formula
   sha256 "927b66c77cd6d373c94fe79cf97cee3dc309f89205b44e285dd04378fc94ca2d"
   license "AGPL-3.0-only"
   revision 1
-  head "https://github.com/anspar/elspais", branch: "main"
+  head "https://github.com/Anspar-Org/elspais.git", branch: "main"
 
-  depends_on "rust" => :build
   depends_on "python@3.12"
+  depends_on "rust" => :build
 
   resource "annotated-types" do
     url "https://files.pythonhosted.org/packages/ee/67/531ea369ba64dcff5ec9c3402f9f51bf748cec26dde048a2f973a4eea7f5/annotated_types-0.7.0.tar.gz"
