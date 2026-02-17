@@ -77,6 +77,11 @@ jobs:
               name, ver = clean.split("==", 1)
               if name == "elspais":
                   continue
+              # Skip pyjwt[crypto] chain - MCP only needs pyjwt (no crypto extra),
+              # and cryptography/cffi require Rust to build from source
+              if name in ("cryptography", "cffi", "pycparser"):
+                  print(f"  Skipping {name}=={ver} (crypto chain, not needed)")
+                  continue
               deps[name] = ver
           print(f"Resolved {len(deps)} dependencies")
 
