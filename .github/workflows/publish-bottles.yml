@@ -1,0 +1,98 @@
+name: Publish Bottles
+
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  publish:
+    if: contains(github.event.pull_request.labels.*.name, 'pr-pull')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Set up Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Extract version from PR title
+        id: version
+        run: |
+          VERSION=$(echo "${{ github.event.pull_request.title }}" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Detected version: ${VERSION}"
+
+      - name: Get build-bottles workflow run
+        id: get-run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the most recent successful build-bottles run for this PR's head SHA
+          RUN_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/build-bottles.yml/runs?head_sha=${{ github.event.pull_request.head.sha }}&status=success&per_page=1" \
+            --jq '.workflow_runs[0].id')
+          if [ -z "${RUN_ID}" ] || [ "${RUN_ID}" = "null" ]; then
+            echo "::error::No successful build-bottles run found for SHA ${{ github.event.pull_request.head.sha }}"
+            exit 1
+          fi
+          echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          echo "Found build run: ${RUN_ID}"
+
+      - name: Download bottle artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bottles-*
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ steps.get-run.outputs.run_id }}
+
+      - name: Setup tap repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          brew tap ${{ github.repository_owner }}/elspais
+          cd "$(brew --repository ${{ github.repository_owner }}/elspais)"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          git fetch origin "${{ github.event.pull_request.head.ref }}"
+          git checkout "${{ github.event.pull_request.head.ref }}"
+
+      - name: Merge bottle JSON into formula
+        run: |
+          ls -la *.bottle.json *.tar.gz 2>/dev/null || true
+          brew bottle --merge --write --no-commit *.bottle.json
+
+      - name: Create GitHub Release and upload bottles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="elspais-${{ steps.version.outputs.version }}"
+          gh release create "${TAG}" \
+            --repo "${{ github.repository }}" \
+            --title "elspais ${{ steps.version.outputs.version }}" \
+            --notes "Bottles for elspais ${{ steps.version.outputs.version }}" \
+            --latest \
+            2>/dev/null || echo "Release ${TAG} already exists"
+          gh release upload "${TAG}" *.tar.gz \
+            --repo "${{ github.repository }}" \
+            --clobber
+
+      - name: Commit updated formula and push
+        run: |
+          cd "$(brew --repository ${{ github.repository_owner }}/elspais)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/
+          if ! git diff --cached --quiet; then
+            git commit -m "bottle: Add bottle for elspais ${{ steps.version.outputs.version }}"
+            git push origin "${{ github.event.pull_request.head.ref }}"
+          fi
+
+      - name: Merge PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --squash \
+            --delete-branch

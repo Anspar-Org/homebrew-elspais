@@ -183,14 +183,24 @@ jobs:
           print(f"Updated Formula/elspais-core.rb")
           PYEOF
 
-      - name: Commit and push directly to main
+      - name: Create branch and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/
           if git diff --cached --quiet; then
             echo "No changes to commit"
-          else
-            git commit -m "chore: Update elspais to ${{ steps.version.outputs.version }}"
-            git push
+            exit 0
           fi
+          BRANCH="update-v${VERSION}"
+          git checkout -b "${BRANCH}"
+          git commit -m "chore: Update elspais to ${VERSION}"
+          git push -u origin "${BRANCH}"
+          gh pr create \
+            --title "Update elspais to ${VERSION}" \
+            --body "Automated formula update for elspais v${VERSION}. Bottles will be built automatically." \
+            --base main \
+            --head "${BRANCH}"
