@@ -8,8 +8,8 @@ class Elspais < Formula
   license "AGPL-3.0-only"
   head "https://github.com/Anspar-Org/elspais.git", branch: "main"
 
-  depends_on "python@3.12"
   depends_on "rust" => :build
+  depends_on "python@3.12"
 
   resource "annotated-types" do
     url "https://files.pythonhosted.org/packages/ee/67/531ea369ba64dcff5ec9c3402f9f51bf748cec26dde048a2f973a4eea7f5/annotated_types-0.7.0.tar.gz"
