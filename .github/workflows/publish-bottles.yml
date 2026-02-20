@@ -108,8 +108,18 @@ jobs:
       - name: Merge PR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh pr merge "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --squash \
-            --delete-branch
+          for attempt in 1 2 3 4 5; do
+            if gh pr merge "${PR_NUMBER}" \
+                 --repo "${{ github.repository }}" \
+                 --squash \
+                 --delete-branch; then
+              echo "PR #${PR_NUMBER} merged successfully on attempt ${attempt}"
+              exit 0
+            fi
+            echo "Merge attempt ${attempt}/5 failed, waiting 15s..."
+            sleep 15
+          done
+          echo "::error::Failed to merge PR #${PR_NUMBER} after 5 attempts"
+          exit 1
