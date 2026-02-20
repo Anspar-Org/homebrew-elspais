@@ -363,6 +363,15 @@ jobs:
             exit 0
           fi
           BRANCH="update-${PACKAGE}-v${VERSION}"
+          # Close any existing open PRs for this package (from previous versions)
+          gh pr list --repo "${{ github.repository }}" --state open --json number,title \
+            --jq ".[] | select(.title | startswith(\"Update ${PACKAGE} to\")) | .number" \
+            | while read pr_num; do
+                echo "Closing stale PR #${pr_num}"
+                gh pr close "${pr_num}" --repo "${{ github.repository }}" --delete-branch 2>/dev/null || true
+              done
+          # Clean up stale remote branch from previous failed runs
+          git push origin --delete "${BRANCH}" 2>/dev/null || true
           git checkout -b "${BRANCH}"
           git commit -m "chore: Update ${PACKAGE} to ${VERSION}"
           git push -u origin "${BRANCH}"
