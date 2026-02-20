@@ -172,8 +172,8 @@ jobs:
               count=1,
           )
           content = re.sub(
-              r'(  depends_on "python@3\.12"\n(?:.*?(?:conflicts_with|head)\s[^\n]*\n)*)\n(?:  resource .*?  end\n\n)*(?=  def )',
-              rf'\1\n{resource_block}',
+              r'(  depends_on "python@3\.12"\n(?:[^\n]*(?:conflicts_with|head)\s[^\n]*\n)*)\n(?:  resource [^\n]+\n(?:[^\n]*\n)*?  end\n\n?)*(?=  def )',
+              rf'\1\n{resource_block}\n',
               content,
               flags=re.DOTALL,
           )
@@ -338,8 +338,8 @@ jobs:
               count=1,
           )
           content = re.sub(
-              r'(  depends_on "python@3\.12"\n)\n(?:  resource .*?  end\n\n)*(?=  def )',
-              rf'\1\n{resource_block}',
+              r'(  depends_on "python@3\.12"\n)\n(?:  resource [^\n]+\n(?:[^\n]*\n)*?  end\n\n?)*(?=  def )',
+              rf'\1\n{resource_block}\n',
               content,
               flags=re.DOTALL,
           )
