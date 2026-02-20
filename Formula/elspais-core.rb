@@ -8,8 +8,8 @@ class ElspaisCore < Formula
   license "AGPL-3.0-only"
 
   bottle do
-    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.74.0"
-    sha256 cellar: :any_skip_relocation, arm64_sequoia: "9d93363f5f4d46b281395d680b34c027fc812617fe56c1b73bf7d74a6d9dd0b0"
+    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.76.0"
+    sha256 cellar: :any_skip_relocation, arm64_sequoia: "b01746906d7600be9a0499b1ba0220634750b62573a239567dfa5c23e4069280"
   end
 
   depends_on "python@3.12"
