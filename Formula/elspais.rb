@@ -213,41 +213,19 @@ class Elspais < Formula
 
       MCP Server Setup
       ================
+      Register with Claude Code and Claude Desktop (one-time):
 
-      For Claude Desktop, add to your config:
-        macOS: ~/Library/Application Support/Claude/claude_desktop_config.json
-        Linux: ~/.config/Claude/claude_desktop_config.json
+        elspais mcp install --global --desktop
 
-        {
-          "mcpServers": {
-            "elspais": {
-              "command": "#{opt_bin}/elspais",
-              "args": ["mcp", "serve"],
-              "cwd": "/path/to/your/project"
-            }
-          }
-        }
+      Or Claude Code only:
 
-      For Claude Code, add to your project's .mcp.json:
-
-        {
-          "mcpServers": {
-            "elspais": {
-              "command": "#{opt_bin}/elspais",
-              "args": ["mcp", "serve"]
-            }
-          }
-        }
-
-      Set "cwd" to the directory containing your .elspais.toml config.
+        elspais mcp install --global
 
       Shell Completion
       ================
-      For zsh, add to your ~/.zshrc:
-        eval "$(register-python-argcomplete elspais)"
+      Install tab-completion for your shell (one-time):
 
-      For bash, add to your ~/.bashrc:
-        eval "$(register-python-argcomplete elspais)"
+        elspais completion --install
 
       Quick Start
       ===========
