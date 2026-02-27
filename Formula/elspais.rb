@@ -3,14 +3,14 @@ class Elspais < Formula
 
   desc "Requirements validation and traceability tools - L-Space connects all libraries"
   homepage "https://github.com/Anspar-Org/elspais"
-  url "https://files.pythonhosted.org/packages/07/a5/a791a5238544a31d1a689b29cb1744549a3a7e9218f5fd9ded76eb26fd35/elspais-0.84.1.tar.gz"
-  sha256 "5884f9b2bf1d78324a65b325dddd049ce214795c8788627787c5f432d7f040a4"
+  url "https://files.pythonhosted.org/packages/4b/31/8578af8893dd1c80bf09aca8fddc4547a61106d74385e0eb6fee21ca0c75/elspais-0.84.2.tar.gz"
+  sha256 "19de3551435ec2d10b87f95fac7a70cfd4d325142225d09fde95e05439bd0f7a"
   license "AGPL-3.0-only"
   head "https://github.com/Anspar-Org/elspais.git", branch: "main"
 
   bottle do
-    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.84.1"
-    sha256 cellar: :any, arm64_sequoia: "bda9c1b7df1cc11155ea2e186d1304c1b1c19f4586176c43399f34a46516c2ea"
+    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.84.2"
+    sha256 cellar: :any, arm64_sequoia: "1342bd7ac4f30bcbc1198170fc123e483ef28aec243c315b58b1b46e7ced644b"
   end
 
   depends_on "rust" => :build
