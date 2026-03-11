@@ -9,8 +9,8 @@ class Elspais < Formula
   head "https://github.com/Anspar-Org/elspais.git", branch: "main"
 
   bottle do
-    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.102.0"
-    sha256 cellar: :any, arm64_sequoia: "03d5ed8aabba5a784a9b41ea7c0fbae096ead39bc8f861f26f1cd9a6241a58b4"
+    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.103.0"
+    sha256 cellar: :any, arm64_sequoia: "8ad86e0b3d1cea05e84a2e0ceceb3f3fa757760d6b6ea6fe771115df42bcc3f9"
   end
 
   depends_on "rust" => :build
