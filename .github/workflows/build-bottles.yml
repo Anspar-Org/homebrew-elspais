@@ -37,7 +37,11 @@ jobs:
         run: |
           # pip 26.0 breaks sdist builds of packages using setuptools-scm
           # (ValueError: paths must be inside source tree)
-          "$(brew --prefix python@3.12)/bin/python3.12" -m pip install 'pip<26' 2>/dev/null || true
+          # Must install directly into Homebrew's Python site-packages
+          PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
+          SITE=$("${PYTHON}" -c "import sysconfig; print(sysconfig.get_path('purelib'))")
+          "${PYTHON}" -m pip install --target "${SITE}" --upgrade 'pip<26'
+          "${PYTHON}" -m pip --version
 
       - run: brew test-bot --only-cleanup-before
 
@@ -102,7 +106,7 @@ jobs:
         run: |
           # Get email from the PR author's GitHub profile
           AUTHOR="${{ github.event.pull_request.user.login }}"
-          EMAIL=$(gh api "users/${AUTHOR}" --jq '.email // empty' 2>/dev/null || echo "")
+          EMAIL=$(gh api "users/${AUTHOR}" --jq '.email // empty')
 
           if [ -n "$EMAIL" ] && ! echo "$EMAIL" | grep -q 'noreply'; then
             SLACK_RESPONSE=$(curl -s -H "Authorization: Bearer ${SLACK_TOKEN}" \
