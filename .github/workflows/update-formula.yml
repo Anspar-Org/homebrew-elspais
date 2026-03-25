@@ -16,6 +16,10 @@ on:
         description: 'Version to update to (e.g., 0.72.0)'
         required: true
         type: string
+      prefer_sdist:
+        description: 'Use sdist instead of wheels (fallback for wheel issues)'
+        type: boolean
+        default: false
 
 jobs:
   update:
@@ -59,11 +63,30 @@ jobs:
         if: steps.params.outputs.package == 'elspais'
         env:
           VERSION: ${{ steps.params.outputs.version }}
+          PREFER_SDIST: ${{ inputs.prefer_sdist || github.event.client_payload.prefer_sdist || 'false' }}
         run: |
           python3 << 'PYEOF'
           import json, os, re, subprocess, time, urllib.request, urllib.error
 
           version = os.environ["VERSION"]
+          prefer_sdist = os.environ.get("PREFER_SDIST", "false").lower() == "true"
+          if prefer_sdist:
+              print("PREFER_SDIST=true: using sdist for all packages")
+
+          def pick_artifact(pkg_urls):
+              """Pick best artifact: wheel by default, sdist if prefer_sdist or no wheel."""
+              wheel = None
+              if not prefer_sdist:
+                  wheel = next(
+                      (f for f in pkg_urls
+                       if f["packagetype"] == "bdist_wheel"
+                       and f["filename"].endswith("-py3-none-any.whl")),
+                      None
+                  )
+              sdist = next(
+                  (f for f in pkg_urls if f["packagetype"] == "sdist"), None
+              )
+              return wheel or sdist, "wheel" if wheel else "sdist"
 
           # --- Phase 1: Wait for PyPI JSON API to index the new version ---
           for attempt in range(12):
@@ -91,13 +114,15 @@ jobs:
           else:
               raise RuntimeError(f"pip could not resolve elspais {version} after 3 minutes")
 
-          # --- Fetch elspais sdist info ---
+          # --- Fetch elspais package info (prefer wheel over sdist) ---
           with urllib.request.urlopen(f"https://pypi.org/pypi/elspais/{version}/json") as r:
               pkg = json.loads(r.read())
-          sdist = next(f for f in pkg["urls"] if f["packagetype"] == "sdist")
-          sdist_url = sdist["url"]
-          sdist_sha = sdist["digests"]["sha256"]
-          print(f"elspais {version}: {sdist_sha[:16]}...")
+          pkg_artifact, pkg_type = pick_artifact(pkg["urls"])
+          if not pkg_artifact:
+              raise RuntimeError(f"No wheel or sdist found for elspais {version}")
+          pkg_url = pkg_artifact["url"]
+          pkg_sha = pkg_artifact["digests"]["sha256"]
+          print(f"elspais {version} ({pkg_type}): {pkg_sha[:16]}...")
 
           # --- Resolve all dependencies for elspais[all] (with retry) ---
           for compile_attempt in range(3):
@@ -131,20 +156,18 @@ jobs:
               deps[name] = ver
           print(f"Resolved {len(deps)} dependencies")
 
-          # --- Fetch sdist URL and SHA for each dependency ---
+          # --- Fetch artifact URL and SHA for each dependency ---
           resources = []
           for name, ver in sorted(deps.items()):
               try:
                   with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{ver}/json") as r:
                       dep_pkg = json.loads(r.read())
-                  dep_sdist = next(
-                      (f for f in dep_pkg["urls"] if f["packagetype"] == "sdist"), None
-                  )
-                  if dep_sdist:
-                      resources.append((name, dep_sdist["url"], dep_sdist["digests"]["sha256"]))
-                      print(f"  {name}=={ver}: OK")
+                  artifact, kind = pick_artifact(dep_pkg["urls"])
+                  if artifact:
+                      resources.append((name, artifact["url"], artifact["digests"]["sha256"]))
+                      print(f"  {name}=={ver}: {kind}")
                   else:
-                      print(f"  WARNING: No sdist for {name}=={ver}")
+                      print(f"  WARNING: No wheel or sdist for {name}=={ver}")
               except Exception as e:
                   print(f"  ERROR: {name}=={ver}: {e}")
                   raise
@@ -164,21 +187,21 @@ jobs:
               content = f.read()
 
           content = re.sub(
-              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
-              f'url "{sdist_url}"',
+              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.(tar\.gz|whl)"',
+              f'url "{pkg_url}"',
               content,
               count=1,
           )
           content = re.sub(
               r'(  sha256 ")[a-f0-9]+(".*\n  license)',
-              rf'\g<1>{sdist_sha}\2',
+              rf'\g<1>{pkg_sha}\2',
               content,
               count=1,
           )
           # Replace all resource blocks between bottle/depends/conflicts section and "def install"
           # Match from the first "resource" line through the last "end" before "def install"
           content = re.sub(
-              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def install\b)',
+              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def )',
               resource_block + '\n',
               content,
           )
@@ -201,14 +224,14 @@ jobs:
               content = f.read()
 
           content = re.sub(
-              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
-              f'url "{sdist_url}"',
+              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.(tar\.gz|whl)"',
+              f'url "{pkg_url}"',
               content,
               count=1,
           )
           content = re.sub(
               r'sha256 "[a-f0-9]+"',
-              f'sha256 "{sdist_sha}"',
+              f'sha256 "{pkg_sha}"',
               content,
               count=1,
           )
@@ -307,20 +330,18 @@ jobs:
               deps[name] = ver
           print(f"Resolved {len(deps)} dependencies")
 
-          # --- Fetch sdist URL and SHA for each dependency ---
+          # --- Fetch artifact URL and SHA for each dependency ---
           resources = []
           for name, ver in sorted(deps.items()):
               try:
                   with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{ver}/json") as r:
                       dep_pkg = json.loads(r.read())
-                  dep_sdist = next(
-                      (f for f in dep_pkg["urls"] if f["packagetype"] == "sdist"), None
-                  )
-                  if dep_sdist:
-                      resources.append((name, dep_sdist["url"], dep_sdist["digests"]["sha256"]))
-                      print(f"  {name}=={ver}: OK")
+                  artifact, kind = pick_artifact(dep_pkg["urls"])
+                  if artifact:
+                      resources.append((name, artifact["url"], artifact["digests"]["sha256"]))
+                      print(f"  {name}=={ver}: {kind}")
                   else:
-                      print(f"  WARNING: No sdist for {name}=={ver}")
+                      print(f"  WARNING: No wheel or sdist for {name}=={ver}")
               except Exception as e:
                   print(f"  ERROR: {name}=={ver}: {e}")
                   raise
@@ -352,7 +373,7 @@ jobs:
               count=1,
           )
           content = re.sub(
-              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def install\b)',
+              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def )',
               resource_block + '\n',
               content,
           )

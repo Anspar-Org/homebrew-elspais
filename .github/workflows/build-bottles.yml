@@ -33,16 +33,6 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           rustc --version
 
-      - name: Pin pip to avoid pip 26.0 setuptools-scm regression
-        run: |
-          # pip 26.0 breaks sdist builds of packages using setuptools-scm
-          # (ValueError: paths must be inside source tree)
-          # Must install directly into Homebrew's Python site-packages
-          PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
-          SITE=$("${PYTHON}" -c "import sysconfig; print(sysconfig.get_path('purelib'))")
-          "${PYTHON}" -m pip install --target "${SITE}" --upgrade 'pip<26'
-          "${PYTHON}" -m pip --version
-
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
