@@ -41,7 +41,8 @@ jobs:
         run: |
           # pip 26.0 breaks sdist builds via setuptools-rust → setuptools-scm chain
           # (ValueError: paths must be inside source tree)
-          # Must run AFTER brew test-bot --only-setup installs Python
+          # Install Python first since test-bot doesn't install deps until --only-formulae
+          brew install python@3.12
           PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
           "${PYTHON}" -m pip install --break-system-packages 'pip<26'
           "${PYTHON}" -m pip --version
