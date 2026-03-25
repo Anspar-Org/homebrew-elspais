@@ -175,12 +175,22 @@ jobs:
               content,
               count=1,
           )
+          # Replace all resource blocks between bottle/depends/conflicts section and "def install"
+          # Match from the first "resource" line through the last "end" before "def install"
           content = re.sub(
-              r'(  depends_on "python@3\.12"\n(?:[^\n]*(?:conflicts_with|head)\s[^\n]*\n)*)\n(?:  resource [^\n]+\n(?:[^\n]*\n)*?  end\n\n?)*(?=  def )',
-              rf'\1\n{resource_block}\n',
+              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def install\b)',
+              resource_block + '\n',
               content,
-              flags=re.DOTALL,
           )
+          # Verify all resolved deps made it into the formula
+          formula_resources = set(re.findall(r'resource "(.+?)" do', content))
+          missing = set(deps.keys()) - formula_resources
+          if missing:
+              raise RuntimeError(
+                  f"Resource replacement failed: {len(missing)} deps missing from formula: "
+                  f"{', '.join(sorted(missing))}. "
+                  f"Check that resource blocks exist before 'def install'."
+              )
 
           with open("Formula/elspais.rb", "w") as f:
               f.write(content)
@@ -342,10 +352,9 @@ jobs:
               count=1,
           )
           content = re.sub(
-              r'(  depends_on "python@3\.12"\n)\n(?:  resource [^\n]+\n(?:[^\n]*\n)*?  end\n\n?)*(?=  def )',
-              rf'\1\n{resource_block}\n',
+              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def install\b)',
+              resource_block + '\n',
               content,
-              flags=re.DOTALL,
           )
 
           with open("Formula/anspar_wf.rb", "w") as f:

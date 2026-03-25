@@ -72,3 +72,77 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: gh pr edit "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --add-label "pr-pull"
+
+  notify-failure:
+    name: Notify Build Failure
+    needs: build-bottle
+    if: always() && needs.build-bottle.result == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract author from PR body
+        id: author
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          AUTHOR=$(echo "$PR_BODY" | grep -oP '^author: \K\S+' || echo "")
+          echo "login=${AUTHOR}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract package and version from PR title
+        id: pr-info
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          PACKAGE=$(echo "$TITLE" | sed -n 's/^Update \(.*\) to .*/\1/p')
+          VERSION=$(echo "$TITLE" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "package=${PACKAGE:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Lookup Slack user for DM
+        id: slack_user
+        if: steps.author.outputs.login != ''
+        env:
+          SLACK_TOKEN: ${{ secrets.SLACK_APP_OATH_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          AUTHOR="${{ steps.author.outputs.login }}"
+          EMAIL=$(gh api "users/${AUTHOR}" --jq '.email // empty' 2>/dev/null || echo "")
+
+          if echo "$EMAIL" | grep -q 'noreply'; then
+            EMAIL=""
+          fi
+
+          if [ -n "$EMAIL" ]; then
+            SLACK_RESPONSE=$(curl -s -H "Authorization: Bearer ${SLACK_TOKEN}" \
+              "https://slack.com/api/users.lookupByEmail?email=${EMAIL}")
+
+            if [ "$(echo "$SLACK_RESPONSE" | jq -r '.ok')" = "true" ]; then
+              echo "user_id=$(echo "$SLACK_RESPONSE" | jq -r '.user.id')" >> "$GITHUB_OUTPUT"
+              echo "found=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine Slack channel
+        id: channel
+        env:
+          SLACK_USER_FOUND: ${{ steps.slack_user.outputs.found }}
+          SLACK_USER_ID: ${{ steps.slack_user.outputs.user_id }}
+          FALLBACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_DEV }}
+        run: |
+          if [ "$SLACK_USER_FOUND" = "true" ]; then
+            echo "id=${SLACK_USER_ID}" >> "$GITHUB_OUTPUT"
+          else
+            echo "id=${FALLBACK_CHANNEL}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send failure notification
+        uses: slackapi/slack-github-action@v2.1.1
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_APP_OATH_TOKEN }}
+          errors: true
+          payload: |
+            channel: "${{ steps.channel.outputs.id }}"
+            text: ":rotating_light: *Homebrew bottle build failed* for ${{ steps.pr-info.outputs.package }} v${{ steps.pr-info.outputs.version }}\n\n*PR:* <${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}>\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View failed run>"
