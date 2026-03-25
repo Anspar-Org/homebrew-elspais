@@ -37,6 +37,15 @@ jobs:
 
       - run: brew test-bot --only-setup
 
+      - name: Pin pip to avoid pip 26.0 setuptools-scm regression
+        run: |
+          # pip 26.0 breaks sdist builds via setuptools-rust → setuptools-scm chain
+          # (ValueError: paths must be inside source tree)
+          # Must run AFTER brew test-bot --only-setup installs Python
+          PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
+          "${PYTHON}" -m pip install --break-system-packages 'pip<26'
+          "${PYTHON}" -m pip --version
+
       - name: Extract package and version from PR title
         id: pr-info
         run: |
