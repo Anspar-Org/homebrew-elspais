@@ -33,6 +33,12 @@ jobs:
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           rustc --version
 
+      - name: Pin pip to avoid pip 26.0 setuptools-scm regression
+        run: |
+          # pip 26.0 breaks sdist builds of packages using setuptools-scm
+          # (ValueError: paths must be inside source tree)
+          "$(brew --prefix python@3.12)/bin/python3.12" -m pip install 'pip<26' 2>/dev/null || true
+
       - run: brew test-bot --only-cleanup-before
 
       - run: brew test-bot --only-setup
@@ -79,14 +85,6 @@ jobs:
     if: always() && needs.build-bottle.result == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - name: Extract author from PR body
-        id: author
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          AUTHOR=$(echo "$PR_BODY" | grep -oP '^author: \K\S+' || echo "")
-          echo "login=${AUTHOR}" >> "$GITHUB_OUTPUT"
-
       - name: Extract package and version from PR title
         id: pr-info
         run: |
@@ -98,44 +96,25 @@ jobs:
 
       - name: Lookup Slack user for DM
         id: slack_user
-        if: steps.author.outputs.login != ''
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_APP_OATH_TOKEN }}
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          AUTHOR="${{ steps.author.outputs.login }}"
+          # Get email from the PR author's GitHub profile
+          AUTHOR="${{ github.event.pull_request.user.login }}"
           EMAIL=$(gh api "users/${AUTHOR}" --jq '.email // empty' 2>/dev/null || echo "")
 
-          if echo "$EMAIL" | grep -q 'noreply'; then
-            EMAIL=""
-          fi
-
-          if [ -n "$EMAIL" ]; then
+          if [ -n "$EMAIL" ] && ! echo "$EMAIL" | grep -q 'noreply'; then
             SLACK_RESPONSE=$(curl -s -H "Authorization: Bearer ${SLACK_TOKEN}" \
               "https://slack.com/api/users.lookupByEmail?email=${EMAIL}")
 
             if [ "$(echo "$SLACK_RESPONSE" | jq -r '.ok')" = "true" ]; then
-              echo "user_id=$(echo "$SLACK_RESPONSE" | jq -r '.user.id')" >> "$GITHUB_OUTPUT"
-              echo "found=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "found=false" >> "$GITHUB_OUTPUT"
+              echo "id=$(echo "$SLACK_RESPONSE" | jq -r '.user.id')" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Determine Slack channel
-        id: channel
-        env:
-          SLACK_USER_FOUND: ${{ steps.slack_user.outputs.found }}
-          SLACK_USER_ID: ${{ steps.slack_user.outputs.user_id }}
-          FALLBACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_DEV }}
-        run: |
-          if [ "$SLACK_USER_FOUND" = "true" ]; then
-            echo "id=${SLACK_USER_ID}" >> "$GITHUB_OUTPUT"
-          else
-            echo "id=${FALLBACK_CHANNEL}" >> "$GITHUB_OUTPUT"
-          fi
+          # Fallback to dev channel
+          echo "id=${{ secrets.SLACK_CHANNEL_DEV }}" >> "$GITHUB_OUTPUT"
 
       - name: Send failure notification
         uses: slackapi/slack-github-action@v2.1.1
@@ -144,5 +123,5 @@ jobs:
           token: ${{ secrets.SLACK_APP_OATH_TOKEN }}
           errors: true
           payload: |
-            channel: "${{ steps.channel.outputs.id }}"
+            channel: "${{ steps.slack_user.outputs.id }}"
             text: ":rotating_light: *Homebrew bottle build failed* for ${{ steps.pr-info.outputs.package }} v${{ steps.pr-info.outputs.version }}\n\n*PR:* <${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }} ${{ github.event.pull_request.title }}>\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View failed run>"

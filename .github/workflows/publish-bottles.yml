@@ -134,55 +134,30 @@ jobs:
     if: always() && needs.publish.result != 'skipped'
 
     steps:
-      - name: Extract author from PR body
-        id: author
-        env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          AUTHOR=$(echo "$PR_BODY" | grep -oP '^author: \K\S+' || echo "")
-          echo "login=${AUTHOR}" >> "$GITHUB_OUTPUT"
-
-      - name: Lookup Slack user for failure DM
-        id: slack_user
-        if: needs.publish.result == 'failure' && steps.author.outputs.login != ''
+      - name: Determine Slack channel
+        id: channel
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_APP_OATH_TOKEN }}
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          AUTHOR="${{ steps.author.outputs.login }}"
+          if [ "${{ needs.publish.result }}" = "failure" ]; then
+            # DM on failure — look up PR author's email from GitHub
+            AUTHOR="${{ github.event.pull_request.user.login }}"
+            EMAIL=$(gh api "users/${AUTHOR}" --jq '.email // empty' 2>/dev/null || echo "")
 
-          EMAIL=$(gh api "users/${AUTHOR}" --jq '.email // empty' 2>/dev/null || echo "")
-
-          if echo "$EMAIL" | grep -q 'noreply'; then
-            EMAIL=""
-          fi
-
-          if [ -n "$EMAIL" ]; then
-            SLACK_RESPONSE=$(curl -s -H "Authorization: Bearer ${SLACK_TOKEN}" \
-              "https://slack.com/api/users.lookupByEmail?email=${EMAIL}")
-
-            if [ "$(echo "$SLACK_RESPONSE" | jq -r '.ok')" = "true" ]; then
-              echo "user_id=$(echo "$SLACK_RESPONSE" | jq -r '.user.id')" >> "$GITHUB_OUTPUT"
-              echo "found=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "found=false" >> "$GITHUB_OUTPUT"
+            if [ -n "$EMAIL" ] && ! echo "$EMAIL" | grep -q 'noreply'; then
+              SLACK_RESPONSE=$(curl -s -H "Authorization: Bearer ${SLACK_TOKEN}" \
+                "https://slack.com/api/users.lookupByEmail?email=${EMAIL}")
+              if [ "$(echo "$SLACK_RESPONSE" | jq -r '.ok')" = "true" ]; then
+                echo "id=$(echo "$SLACK_RESPONSE" | jq -r '.user.id')" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
             fi
+            # Fallback to dev channel
+            echo "id=${{ secrets.SLACK_CHANNEL_DEV }}" >> "$GITHUB_OUTPUT"
           else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Determine Slack channel
-        id: channel
-        env:
-          RESULT: ${{ needs.publish.result }}
-          SLACK_USER_FOUND: ${{ steps.slack_user.outputs.found }}
-          SLACK_USER_ID: ${{ steps.slack_user.outputs.user_id }}
-          FALLBACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_DEV }}
-        run: |
-          if [ "$RESULT" = "failure" ] && [ "$SLACK_USER_FOUND" = "true" ]; then
-            echo "id=${SLACK_USER_ID}" >> "$GITHUB_OUTPUT"
-          else
-            echo "id=${FALLBACK_CHANNEL}" >> "$GITHUB_OUTPUT"
+            # Success goes to dev channel
+            echo "id=${{ secrets.SLACK_CHANNEL_DEV }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build message
