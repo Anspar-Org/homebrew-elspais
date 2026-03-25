@@ -114,15 +114,15 @@ jobs:
           else:
               raise RuntimeError(f"pip could not resolve elspais {version} after 3 minutes")
 
-          # --- Fetch elspais package info (prefer wheel over sdist) ---
+          # --- Fetch elspais package info ---
+          # Main formula url must be sdist (Homebrew extracts it as a directory)
+          # Wheel support only works for resource blocks
           with urllib.request.urlopen(f"https://pypi.org/pypi/elspais/{version}/json") as r:
               pkg = json.loads(r.read())
-          pkg_artifact, pkg_type = pick_artifact(pkg["urls"])
-          if not pkg_artifact:
-              raise RuntimeError(f"No wheel or sdist found for elspais {version}")
-          pkg_url = pkg_artifact["url"]
-          pkg_sha = pkg_artifact["digests"]["sha256"]
-          print(f"elspais {version} ({pkg_type}): {pkg_sha[:16]}...")
+          sdist = next(f for f in pkg["urls"] if f["packagetype"] == "sdist")
+          pkg_url = sdist["url"]
+          pkg_sha = sdist["digests"]["sha256"]
+          print(f"elspais {version} (sdist): {pkg_sha[:16]}...")
 
           # --- Resolve all dependencies for elspais[all] (with retry) ---
           for compile_attempt in range(3):
@@ -187,7 +187,7 @@ jobs:
               content = f.read()
 
           content = re.sub(
-              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.(tar\.gz|whl)"',
+              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
               f'url "{pkg_url}"',
               content,
               count=1,
@@ -224,7 +224,7 @@ jobs:
               content = f.read()
 
           content = re.sub(
-              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.(tar\.gz|whl)"',
+              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
               f'url "{pkg_url}"',
               content,
               count=1,
