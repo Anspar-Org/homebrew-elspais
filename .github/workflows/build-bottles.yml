@@ -41,11 +41,13 @@ jobs:
         run: |
           # pip 26.0 breaks sdist builds via setuptools-rust → setuptools-scm chain
           # (ValueError: paths must be inside source tree)
-          # Install Python first since test-bot doesn't install deps until --only-formulae
+          # Install Python, then overlay pip<26 via PYTHONPATH (can't uninstall system pip)
           brew install python@3.12
           PYTHON="$(brew --prefix python@3.12)/bin/python3.12"
-          "${PYTHON}" -m pip install --break-system-packages 'pip<26'
-          "${PYTHON}" -m pip --version
+          PIP_OVERLAY="$(mktemp -d)"
+          "${PYTHON}" -m pip install --target "${PIP_OVERLAY}" 'pip<26'
+          echo "PYTHONPATH=${PIP_OVERLAY}:${PYTHONPATH}" >> "$GITHUB_ENV"
+          PYTHONPATH="${PIP_OVERLAY}" "${PYTHON}" -m pip --version
 
       - name: Extract package and version from PR title
         id: pr-info
