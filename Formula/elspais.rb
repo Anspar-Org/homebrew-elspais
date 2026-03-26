@@ -19,7 +19,8 @@ class Elspais < Formula
 
   def install
     virtualenv_create(libexec, "python3.12")
-    system libexec/"bin/pip", "install", "--no-cache-dir", ".[all]"
+    # Install from PyPI (uses binary wheels, avoids sdist build chain issues)
+    system libexec/"bin/pip", "install", "elspais[all]==#{version}"
     bin.install_symlink Dir[libexec/"bin/elspais"]
     bin.install_symlink libexec/"bin/register-python-argcomplete"
   end
