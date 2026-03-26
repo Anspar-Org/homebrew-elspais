@@ -18,7 +18,8 @@ class ElspaisCore < Formula
 
   def install
     virtualenv_create(libexec, "python3.12")
-    system libexec/"bin/pip", "install", "--no-cache-dir", "."
+    # Install from PyPI (uses wheel, avoids sdist build chain issues)
+    system libexec/"bin/pip", "install", "elspais==#{version}"
     bin.install_symlink Dir[libexec/"bin/elspais"]
   end
 
