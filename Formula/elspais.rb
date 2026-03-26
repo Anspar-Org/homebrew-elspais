@@ -22,7 +22,24 @@ class Elspais < Formula
   end
 
   def install
-    virtualenv_install_with_resources
+    python3 = "python3.12"
+    virtualenv_create(libexec, python3)
+
+    # Install each resource with build isolation enabled and WITHOUT
+    # --no-binary. This avoids the pip 26 + setuptools-scm 10.x
+    # circular dependency that breaks --no-binary=:all: sdist builds.
+    # See: https://github.com/Homebrew/homebrew-core/issues/274246
+    pip_args = ["--verbose", "--no-deps", "--ignore-installed",
+                "--no-compile", "--prefix=#{libexec}"]
+    resources.each do |r|
+      r.stage do
+        system libexec/"bin/python", "-m", "pip", "install", *pip_args, "."
+      end
+    end
+
+    # Install main package
+    system libexec/"bin/python", "-m", "pip", "install", *pip_args, buildpath
+    bin.install_symlink Dir[libexec/"bin/elspais"]
     bin.install_symlink libexec/"bin/register-python-argcomplete"
   end
 
