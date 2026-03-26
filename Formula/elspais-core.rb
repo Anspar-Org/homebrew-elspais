@@ -16,10 +16,24 @@ class ElspaisCore < Formula
 
   conflicts_with "elspais", because: "both install the `elspais` binary"
 
+  resource "tomlkit" do
+    url "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz"
+    sha256 "cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064"
+  end
+
   def install
-    virtualenv_create(libexec, "python3.12")
-    # Install from PyPI (uses wheel, avoids sdist build chain issues)
-    system libexec/"bin/pip", "install", "elspais==#{version}"
+    python3 = "python3.12"
+    venv = virtualenv_create(libexec, python3)
+
+    resources.each do |r|
+      r.stage do
+        system libexec/"bin/python", "-m", "pip", "install",
+               *std_pip_args(prefix: libexec, build_isolation: true), "."
+      end
+    end
+
+    system libexec/"bin/python", "-m", "pip", "install",
+           *std_pip_args(prefix: libexec, build_isolation: true), "."
     bin.install_symlink Dir[libexec/"bin/elspais"]
   end
 

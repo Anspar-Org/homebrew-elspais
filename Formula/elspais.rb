@@ -13,14 +13,35 @@ class Elspais < Formula
     sha256 cellar: :any, arm64_sequoia: "3b20e3f7e98afaa84bf936f5b2409fa7b62eb07068b4bcdb12eb60071817ffcd"
   end
 
+  depends_on "maturin" => :build
+  depends_on "rust" => :build
   depends_on "python@3.12"
 
   conflicts_with "elspais-core", because: "both install the `elspais` binary"
 
+  resource "tomlkit" do
+    url "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz"
+    sha256 "cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064"
+  end
+
   def install
-    virtualenv_create(libexec, "python3.12")
-    # Install from PyPI (uses binary wheels, avoids sdist build chain issues)
-    system libexec/"bin/pip", "install", "elspais[all]==#{version}"
+    python3 = "python3.12"
+    venv = virtualenv_create(libexec, python3)
+
+    # Install resources with build isolation (pip 26 compat: lets pip
+    # fetch build deps like maturin as wheels instead of forcing sdist)
+    resources.each do |r|
+      r.stage do
+        system libexec/"bin/python", "-m", "pip", "install",
+               *std_pip_args(prefix: libexec, build_isolation: true), "."
+      end
+    end
+
+    # Install main package
+    system libexec/"bin/python", "-m", "pip", "install",
+           *std_pip_args(prefix: libexec, build_isolation: true), "."
+
+    # Link scripts
     bin.install_symlink Dir[libexec/"bin/elspais"]
     bin.install_symlink libexec/"bin/register-python-argcomplete"
   end
