@@ -62,6 +62,9 @@ jobs:
           # Skip if already fixed
           grep -q 'os.path.commonprefix' "$IMPL" || { echo "Already patched or fixed upstream"; exit 0; }
 
+          # Make writable (Homebrew Cellar files may be read-only)
+          chmod u+w "$IMPL"
+
           # Apply the one-line fix
           python3 -c "
           import sys, pathlib, re
