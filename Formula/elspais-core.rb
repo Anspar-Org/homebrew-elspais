@@ -16,11 +16,13 @@ class ElspaisCore < Formula
 
   conflicts_with "elspais", because: "both install the `elspais` binary"
 
+  resource "tomlkit" do
+    url "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz"
+    sha256 "cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064"
+  end
+
   def install
-    python3 = Formula["python@3.12"].opt_libexec/"bin/python"
-    system python3, "-m", "venv", libexec
-    system libexec/"bin/pip", "install", "elspais==#{version}"
-    bin.install_symlink Dir[libexec/"bin/elspais"]
+    virtualenv_install_with_resources
   end
 
   def caveats

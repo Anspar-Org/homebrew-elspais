@@ -13,18 +13,18 @@ class Elspais < Formula
     sha256 cellar: :any, arm64_sequoia: "3b20e3f7e98afaa84bf936f5b2409fa7b62eb07068b4bcdb12eb60071817ffcd"
   end
 
+  depends_on "rust" => :build
   depends_on "python@3.12"
 
   conflicts_with "elspais-core", because: "both install the `elspais` binary"
 
+  resource "tomlkit" do
+    url "https://files.pythonhosted.org/packages/c3/af/14b24e41977adb296d6bd1fb59402cf7d60ce364f90c890bd2ec65c43b5a/tomlkit-0.14.0.tar.gz"
+    sha256 "cf00efca415dbd57575befb1f6634c4f42d2d87dbba376128adb42c121b87064"
+  end
+
   def install
-    # Create venv WITH pip so we can install from PyPI directly.
-    # Homebrew's std_pip_args uses --no-binary=:all: which is incompatible
-    # with pip 26 for packages using hatchling (most of the ecosystem).
-    python3 = Formula["python@3.12"].opt_libexec/"bin/python"
-    system python3, "-m", "venv", libexec
-    system libexec/"bin/pip", "install", "elspais[all]==#{version}"
-    bin.install_symlink Dir[libexec/"bin/elspais"]
+    virtualenv_install_with_resources
     bin.install_symlink libexec/"bin/register-python-argcomplete"
   end
 

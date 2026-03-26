@@ -37,6 +37,47 @@ jobs:
 
       - run: brew test-bot --only-setup
 
+      - name: Patch pip vendored pyproject_hooks (commonprefix -> commonpath)
+        run: |
+          # pip 26.0 vendors an old pyproject_hooks that uses os.path.commonprefix()
+          # in norm_and_check(), which falsely rejects valid backend_path entries.
+          # The upstream pyproject-hooks repo already fixed this (commonpath).
+          # Homebrew issue: https://github.com/Homebrew/homebrew-core/issues/274246
+          IMPL=$(python3 -c "
+          import glob, sys
+          for pat in [
+              '/opt/homebrew/Cellar/python@3.*/*/lib/python3.*/site-packages/pip/_vendor/pyproject_hooks/_impl.py',
+              '/opt/homebrew/lib/python3.*/site-packages/pip/_vendor/pyproject_hooks/_impl.py',
+              '/usr/local/Cellar/python@3.*/*/lib/python3.*/site-packages/pip/_vendor/pyproject_hooks/_impl.py',
+          ]:
+              hits = glob.glob(pat)
+              if hits:
+                  print(hits[0]); sys.exit(0)
+          sys.exit(1)
+          ")
+          echo "Found: $IMPL"
+
+          # Skip if already fixed
+          grep -q 'os.path.commonprefix' "$IMPL" || { echo "Already patched or fixed upstream"; exit 0; }
+
+          # Apply the one-line fix
+          python3 -c "
+          import sys, pathlib, re
+          p = pathlib.Path(sys.argv[1])
+          src = p.read_text()
+          patched, n = re.subn(r'\bos\.path\.commonprefix\b', 'os.path.commonpath', src)
+          assert n == 1, f'Expected 1 match, got {n}'
+          p.write_text(patched)
+          print(f'Patched {n} occurrence in {p}')
+          " "$IMPL"
+
+          # Clear bytecode cache
+          rm -f "$(dirname "$IMPL")/__pycache__"/_impl.*.pyc
+
+          # Verify
+          grep -q 'os.path.commonpath' "$IMPL" && echo "PASS: commonpath present"
+          ! grep -q 'os.path.commonprefix' "$IMPL" && echo "PASS: commonprefix absent"
+
       - name: Extract package and version from PR title
         id: pr-info
         run: |

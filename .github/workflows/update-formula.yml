@@ -55,17 +55,21 @@ jobs:
           echo "author=${AUTHOR}" >> "$GITHUB_OUTPUT"
           echo "Updating ${PACKAGE} to v${VERSION} (author: ${AUTHOR})"
 
+      - name: Install pip-tools
+        if: steps.params.outputs.package == 'elspais'
+        run: pip install pip-tools
+
       - name: Update elspais formulas
         if: steps.params.outputs.package == 'elspais'
         env:
           VERSION: ${{ steps.params.outputs.version }}
         run: |
           python3 << 'PYEOF'
-          import json, os, re, time, urllib.request, urllib.error
+          import json, os, re, subprocess, time, urllib.request, urllib.error
 
           version = os.environ["VERSION"]
 
-          # --- Wait for PyPI to index the new version ---
+          # --- Wait for PyPI ---
           for attempt in range(12):
               try:
                   urllib.request.urlopen(f"https://pypi.org/pypi/elspais/{version}/json")
@@ -77,7 +81,20 @@ jobs:
           else:
               raise RuntimeError(f"PyPI never indexed elspais {version}")
 
-          # --- Fetch sdist URL and SHA ---
+          for attempt in range(18):
+              result = subprocess.run(
+                  ["pip", "install", "--dry-run", "--no-deps", f"elspais=={version}"],
+                  capture_output=True, text=True
+              )
+              if result.returncode == 0:
+                  print(f"pip can resolve elspais {version} (attempt {attempt+1})")
+                  break
+              print(f"Waiting for pip index... (attempt {attempt+1}/18)")
+              time.sleep(10)
+          else:
+              raise RuntimeError(f"pip could not resolve elspais {version}")
+
+          # --- Fetch sdist info ---
           with urllib.request.urlopen(f"https://pypi.org/pypi/elspais/{version}/json") as r:
               pkg = json.loads(r.read())
           sdist = next(f for f in pkg["urls"] if f["packagetype"] == "sdist")
@@ -85,22 +102,107 @@ jobs:
           pkg_sha = sdist["digests"]["sha256"]
           print(f"elspais {version}: {pkg_sha[:16]}...")
 
-          # --- Update both formulas (just URL + SHA, no resources) ---
-          # Dependencies are resolved by pip at install time from PyPI
-          for formula in ("Formula/elspais.rb", "Formula/elspais-core.rb"):
-              with open(formula) as f:
-                  content = f.read()
-              content = re.sub(
-                  r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
-                  f'url "{pkg_url}"', content, count=1,
+          # --- Resolve dependencies ---
+          for compile_attempt in range(3):
+              result = subprocess.run(
+                  ["pip-compile", "--no-header", "--no-annotate", "--output-file=-", "-"],
+                  input=f"elspais[all]=={version}\n",
+                  capture_output=True, text=True
               )
-              content = re.sub(
-                  r'sha256 "[a-f0-9]+"',
-                  f'sha256 "{pkg_sha}"', content, count=1,
+              if result.returncode == 0:
+                  break
+              print(f"pip-compile attempt {compile_attempt+1}/3 failed, retrying...")
+              time.sleep(15)
+          if result.returncode != 0:
+              raise RuntimeError(f"pip-compile failed:\n{result.stderr}")
+
+          deps = {}
+          for line in result.stdout.strip().split("\n"):
+              line = line.strip()
+              if not line or line.startswith("#"):
+                  continue
+              clean = re.sub(r'\[.*?\]', '', line)
+              if "==" not in clean:
+                  continue
+              name, ver = clean.split("==", 1)
+              if name == "elspais":
+                  continue
+              if name in ("cryptography", "cffi", "pycparser"):
+                  print(f"  Skipping {name}=={ver} (crypto chain)")
+                  continue
+              deps[name] = ver
+          print(f"Resolved {len(deps)} dependencies")
+
+          # --- Fetch sdist for each dep ---
+          resources = []
+          for name, ver in sorted(deps.items()):
+              with urllib.request.urlopen(f"https://pypi.org/pypi/{name}/{ver}/json") as r:
+                  dep_pkg = json.loads(r.read())
+              sdist = next(
+                  (f for f in dep_pkg["urls"] if f["packagetype"] == "sdist"), None
               )
-              with open(formula, "w") as f:
-                  f.write(content)
-              print(f"Updated {formula}")
+              if sdist:
+                  resources.append((name, sdist["url"], sdist["digests"]["sha256"]))
+                  print(f"  {name}=={ver}: sdist")
+              else:
+                  print(f"  WARNING: No sdist for {name}=={ver}")
+
+          # --- Generate resource blocks ---
+          resource_lines = []
+          for name, url, sha in resources:
+              resource_lines.append(f'  resource "{name}" do')
+              resource_lines.append(f'    url "{url}"')
+              resource_lines.append(f'    sha256 "{sha}"')
+              resource_lines.append(f'  end')
+              resource_lines.append('')
+          resource_block = "\n".join(resource_lines)
+
+          # --- Update elspais.rb ---
+          with open("Formula/elspais.rb") as f:
+              content = f.read()
+          content = re.sub(
+              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
+              f'url "{pkg_url}"', content, count=1,
+          )
+          content = re.sub(
+              r'(  sha256 ")[a-f0-9]+(".*\n  license)',
+              rf'\g<1>{pkg_sha}\2', content, count=1,
+          )
+          content = re.sub(
+              r'(  resource ".*?" do\n    url ".*?"\n    sha256 ".*?"\n  end\n\n?)+(?=  def )',
+              resource_block + '\n', content,
+          )
+          formula_resources = set(re.findall(r'resource "(.+?)" do', content))
+          missing = set(deps.keys()) - formula_resources
+          if missing:
+              raise RuntimeError(f"Resource replacement failed: {', '.join(sorted(missing))}")
+          with open("Formula/elspais.rb", "w") as f:
+              f.write(content)
+          print("Updated Formula/elspais.rb")
+
+          # --- Update elspais-core.rb ---
+          with open("Formula/elspais-core.rb") as f:
+              content = f.read()
+          content = re.sub(
+              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
+              f'url "{pkg_url}"', content, count=1,
+          )
+          content = re.sub(
+              r'sha256 "[a-f0-9]+"',
+              f'sha256 "{pkg_sha}"', content, count=1,
+          )
+          if "tomlkit" in deps:
+              tk = next(r for r in resources if r[0] == "tomlkit")
+              content = re.sub(
+                  r'(resource "tomlkit" do\s+url ")[^"]+(")',
+                  rf'\g<1>{tk[1]}\2', content,
+              )
+              parts = content.split('resource "tomlkit"', 1)
+              parts[1] = re.sub(r'sha256 "[a-f0-9]+"', f'sha256 "{tk[2]}"', parts[1], count=1)
+              content = 'resource "tomlkit"'.join(parts)
+          with open("Formula/elspais-core.rb", "w") as f:
+              f.write(content)
+          print("Updated Formula/elspais-core.rb")
           PYEOF
 
       - name: Update anspar-wf formula
