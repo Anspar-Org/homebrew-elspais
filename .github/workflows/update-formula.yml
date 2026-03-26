@@ -179,30 +179,7 @@ jobs:
           with open("Formula/elspais.rb", "w") as f:
               f.write(content)
           print("Updated Formula/elspais.rb")
-
-          # --- Update elspais-core.rb ---
-          with open("Formula/elspais-core.rb") as f:
-              content = f.read()
-          content = re.sub(
-              r'url "https://files\.pythonhosted\.org/packages/[^"]+/elspais-[^"]+\.tar\.gz"',
-              f'url "{pkg_url}"', content, count=1,
-          )
-          content = re.sub(
-              r'sha256 "[a-f0-9]+"',
-              f'sha256 "{pkg_sha}"', content, count=1,
-          )
-          if "tomlkit" in deps:
-              tk = next(r for r in resources if r[0] == "tomlkit")
-              content = re.sub(
-                  r'(resource "tomlkit" do\s+url ")[^"]+(")',
-                  rf'\g<1>{tk[1]}\2', content,
-              )
-              parts = content.split('resource "tomlkit"', 1)
-              parts[1] = re.sub(r'sha256 "[a-f0-9]+"', f'sha256 "{tk[2]}"', parts[1], count=1)
-              content = 'resource "tomlkit"'.join(parts)
-          with open("Formula/elspais-core.rb", "w") as f:
-              f.write(content)
-          print("Updated Formula/elspais-core.rb")
+          # Note: elspais-core is deprecated (pydantic is now a core dep)
           PYEOF
 
       - name: Update anspar-wf formula
