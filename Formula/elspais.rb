@@ -3,14 +3,14 @@ class Elspais < Formula
 
   desc "Requirements validation and traceability tools - L-Space connects all libraries"
   homepage "https://github.com/Anspar-Org/elspais"
-  url "https://files.pythonhosted.org/packages/83/f4/14a46f694b5269a66b600844be5c16353a4c2c8ea6d7fe74db35f1ed0ec8/elspais-0.114.30.tar.gz"
-  sha256 "574e81b7b85d0efb5bbee1cbf151c8406e1353f25b3914fd066b0e1bf0ee732e"
+  url "https://files.pythonhosted.org/packages/c5/cc/1861fd9a09c369216df1e28aeeb506b2dae64cd209b6804d1ae4160ac6d9/elspais-0.114.33.tar.gz"
+  sha256 "1f1270a1391f118fcafbe960c1883f2ab93abf06b92dffa3f295a308a9acab39"
   license "AGPL-3.0-only"
   head "https://github.com/Anspar-Org/elspais.git", branch: "main"
 
   bottle do
-    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.114.30"
-    sha256 cellar: :any, arm64_sequoia: "0f03a343c912d6731573e80823f0fa5fb9b603af2a655a9f9ef38ee4ff6e50d0"
+    root_url "https://github.com/Anspar-Org/homebrew-anspar/releases/download/elspais-0.114.33"
+    sha256 cellar: :any, arm64_sequoia: "149bf681a973f0c98c525dc50c39891062d30a1e1615a512120d74e8ce6913f0"
   end
 
   depends_on "rust" => :build
@@ -182,8 +182,8 @@ class Elspais < Formula
   end
 
   resource "uvicorn" do
-    url "https://files.pythonhosted.org/packages/eb/2e/62b0d9a2cfc8b4de6771322dae30f2db76c66dae9ec32e94e176a44ad563/uvicorn-0.45.0.tar.gz"
-    sha256 "3fe650df136c5bd2b9b06efc5980636344a2fbb840e9ddd86437d53144fa335d"
+    url "https://files.pythonhosted.org/packages/1f/93/041fca8274050e40e6791f267d82e0e2e27dd165627bd640d3e0e378d877/uvicorn-0.46.0.tar.gz"
+    sha256 "fb9da0926999cc6cb22dc7cd71a94a632f078e6ae47ff683c5c420750fb7413d"
   end
 
   def install
